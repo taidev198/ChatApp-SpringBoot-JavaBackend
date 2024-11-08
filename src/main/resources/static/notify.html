@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Notifications</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        #notifications {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" integrity="sha384-xOolHFLEh07PJGoPkLv1IbcEPTNtaed2xpHsD9ESMhqIYd0nLMwNLD69Npy4HI+N" crossorigin="anonymous">
+<!--    <script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>-->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-Fy6S3B9q64WdZWQUiU+q4/2Lc9npb8tCaSX9FK7E8HnRr0Jz8D6OP9dO5Vg3Q9ct" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-Fy6S3B9q64WdZWQUiU+q4/2Lc9npb8tCaSX9FK7E8HnRr0Jz8D6OP9dO5Vg3Q9ct" crossorigin="anonymous"></script>
+
+</head>
+<body>
+<h1>Real-Time Notifications</h1>
+<!--<button type="button" class="btn btn-primary">-->
+<!--    Notifications <span class="badge badge-light" id="badge_notify">0</span>-->
+<!--</button>-->
+<div id="notifications">
+    <!-- Notifications will appear here -->
+</div>
+<p>
+    <a class="btn btn-primary" data-toggle="collapse" href="#collapseExample" role="button" aria-expanded="false" aria-controls="collapseExample">
+        Notifications <span class="badge badge-light" id="badge_notify">0</span>
+    </a>
+</p>
+<div id="notification-list">
+    <ul>
+        <!-- Loop through notifications and display them -->
+        <li th:each="notification : ${notifications}">
+            <span th:text="${notification.message}"></span>
+            <button onclick="markAsRead([[${notification.id}]])">Mark as Read</button>
+        </li>
+    </ul>
+</div>
+
+<script type="text/javascript">
+    console.log('tai')
+
+    function fetchNotifications() {
+        $.ajax({
+            url: `/notifications/unread/${notification.id}`, // Adjust to dynamically get the user ID
+            method: 'GET',
+            success: function (data) {
+                // Update the UI with the new notifications
+                const notificationList = $("#notification-list ul");
+                notificationList.empty();
+                data.forEach(notification => {
+                    notificationList.append(`
+                        <li id="notification-${notification.id}">
+                            <span>${notification.message}</span>
+                            <button onclick="markAsRead(${notification.id})">Mark as Read</button>
+                        </li>
+                    `);
+                });
+            }
+        });
+    }
+    function markAsRead(notificationId) {
+        // $.ajax({
+        //     url: `http://localhost:8080/notifications/markAsRead/${notificationId}`,
+        //     method: 'POST',
+        //     success: function () {
+        //         // Remove notification from list or update UI to reflect the read status
+        //         $(`#notification-${notificationId}`).remove();
+        //     }
+        // });
+        fetch(`http://localhost:8080/notifications/markAsRead/${notificationId}`, {
+            method: 'POST'
+        })
+            .then(res => {
+                if(res.ok) {
+                    window.location.href = `${window.location.pathname}?deleteSuccess=true`;
+                } else {
+                    throw new Error('Có lỗi xảy ra khi xóa sản phẩm');
+                }
+                event.preventDefault()
+            })
+            .then()
+            .catch(error => {
+                console.log(error)
+            });
+        event.preventDefault()
+    }
+
+    // Poll every 5 seconds for new notifications
+    //setInterval(fetchNotifications, 5000);
+
+    const notificationBadge = document.getElementById("badge_notify");
+    // Establish a connection to the SSE endpoint
+    const eventSource =  new EventSource("/notifications/stream");
+    const notifications =  JSON.parse(localStorage.getItem("notifications")) || []
+    //notificationBadge.textContent = notifications.length;
+    // Listen for messages from the server
+    eventSource.onmessage = function(event) {
+        notifications.push(event.data)
+        notificationBadge.textContent = notifications.length;
+        console.log('test')
+    };
+
+    // Listen for events specifically named "notification"
+    eventSource.addEventListener("notification", function(event) {
+        notifications.push(event.data)
+        notificationBadge.textContent = notifications.length;
+        displayNotification(event.data);
+    });
+
+    function displayNotification(message) {
+        // Display the notification in the #notifications div
+        // const notificationDiv = document.getElementById("notifications");
+        // const newNotification = document.createElement("p");
+        // newNotification.textContent = `New Notification: ${message}`;
+        // notificationDiv.appendChild(newNotification);
+        // Update the UI with the new notifications
+        const notificationList = $("#notification-list ul");
+        notificationList.empty();
+        message = JSON.parse(message)
+        for (const notification of message) {
+            notificationList.append(`
+                        <li id="notification-${notification.id}">
+                            <span>${notification.message}</span>
+                            <button onclick="markAsRead(${notification.id})">Mark as Read</button>
+                        </li>
+                    `);
+        }
+    }
+
+    // Clean up the event source connection when the page is closed or reloaded
+    window.addEventListener('beforeunload', function() {
+        localStorage.setItem("notifications", JSON.stringify(notifications));
+        eventSource.close();
+    });
+</script>
+</body>
+</html>
